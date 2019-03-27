@@ -1,0 +1,4 @@
+#!/bin/bash
+
+$usearch -cluster_smallmem ../out/uniques.fa -id 0.99 \
+-maxdiffs 4 -centroids ../out/precluster.fa --sortedby size

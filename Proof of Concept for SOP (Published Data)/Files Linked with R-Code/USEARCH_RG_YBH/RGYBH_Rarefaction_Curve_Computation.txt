@@ -1,0 +1,18 @@
+###INSTALL BIOM###
+
+pip install biom-format
+
+
+###Convert RGYBH_singleton_otutable_UPDATE.csv to .biom format###
+
+biom convert -i RGYBH_singleton_otutable_UPDATE -o RGYBH_singleton_otutable_UPDATE.biom --table-type "OTU table" --to-json
+
+###Open Mothur (https://www.mothur.org/wiki/Installation)###
+
+
+
+mothur > make.shared(biom=RGYBH_singleton_otutable_UPDATE.biom)
+mothur > rarefaction.single(shared=RGYBH_singleton_otutable_UPDATE.shared)
+
+
+###File renamed to RGYBH_otutableTESTgroups.rarefaction###

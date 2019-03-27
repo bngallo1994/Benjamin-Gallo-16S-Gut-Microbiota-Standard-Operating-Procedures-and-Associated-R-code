@@ -1,0 +1,8 @@
+#!/bin/bash
+  
+cd ../fq
+
+$usearch -fastq_mergepairs *_R1*.fastq -relabel @ \
+ -fastq_maxdiffs 5 -fastq_pctid 90 \
+ -fastq_minmergelen 400 -fastq_maxmergelen 600 \
+ -fastqout ../out/merge.fq

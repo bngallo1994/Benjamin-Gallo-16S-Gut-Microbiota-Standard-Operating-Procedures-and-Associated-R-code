@@ -1,0 +1,4 @@
+#!/bin/bash
+
+$usearch -usearch_global ../out/merge.fq -db ../out/otus.fa \
+ -strand plus -id 0.97 -otutabout ../out/otutable.txt -mothur_shared_out ../out/otutableTEST

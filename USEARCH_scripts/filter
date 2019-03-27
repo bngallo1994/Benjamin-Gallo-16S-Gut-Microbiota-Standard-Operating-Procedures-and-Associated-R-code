@@ -1,0 +1,4 @@
+#!/bin/bash
+
+$usearch -fastq_filter ../out/stripped.fq -fastq_maxee 0.5 \
+ -fastaout ../out/filtered.fa

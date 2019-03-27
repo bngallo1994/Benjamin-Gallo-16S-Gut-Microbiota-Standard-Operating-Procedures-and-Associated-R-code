@@ -1,0 +1,4 @@
+#!/bin/bash
+
+$usearch -cluster_otus ../out/final.fa -minsize 2 \
+ -otus ../out/otus2.fa -relabel Otu
