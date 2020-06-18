@@ -1,0 +1,816 @@
+---
+title: "Pilot Data Analysis (Fall 2017)"
+author: "Benjamin Gallo"
+date: "Fall 2018"
+output: html_document
+---
+
+Load necessary packages
+
+```{r}
+library(ggplot2)
+library(reshape2)
+library(ggrepel)
+library(vegan)
+library(ggmap)
+library (entropart)
+library(ggpubr)
+library(ape)
+library(phyloseq)
+library(RColorBrewer)
+library(car)
+library(themetagenomics)
+```
+
+
+RGYBH - Rarefaction (Fig 2) - Code Contributions from Jessica Mizzi (https://github.com/jessicamizzi)
+
+Note Rarefaction data is singleton!
+
+```{r}
+#Call forth data files from Github repository, change the path location based on your own computer:
+RGYBH_data<-read.table("~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_otutableTESTgroups.rarefaction", header=TRUE)
+
+#Grab all samples names and use as data columns (all sample names have "use" in them):
+RGYBHDataColumnsPrimary<-RGYBH_data[grepl("use", names(RGYBH_data))]
+
+#Subset data based on cloumn "numsampled":
+RGYBHnumSampled<-RGYBH_data[, c("numsampled")]
+
+#Bind RGYBHnumSampled and RGYBHDataColumnsPrimary:
+RGYBH_data<-cbind (RGYBHnumSampled, RGYBHDataColumnsPrimary)
+
+#Convert to long form:
+RGYBH_long<-melt(RGYBH_data, id.vars="RGYBHnumSampled")
+
+#Export file as .csv:
+write.csv(RGYBH_long, "RGYBH_long.csv")
+
+###Offloaded RGYBH_long###
+###Manually  write in Species designations on .csv###
+
+#Reupload .csv file
+RGYBH_long<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_long.csv", header = TRUE, check.names = FALSE, row.names = 1)
+```
+
+```{r}
+#Make Graph
+options (scipen = 100000000)
+RGYBH_rarefaction<-ggplot(data=RGYBH_long, aes(x = RGYBHnumSampled, y = value, color=Species)) + geom_line (aes(group=variable), size=1.5) + scale_color_manual(values = c("black", "red")) + xlab("Number of Sequences") + ylab("OTUs (97% cutoff)") + theme_classic()
+
+#Modify axis/text to make figure easier to understand:
+RGYBH_rarefaction<-RGYBH_rarefaction + theme(axis.text = element_text(size=14), axis.title = element_text(size=14))
+```
+
+
+RGYBH - NMDS (Fig 2) - Code contributions  by Geoffrey Zahn (http://geoffreyzahn.com/nmds-example/)
+
+```{r}
+RGYBH_otus<-read.csv(file="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_otutable.csv", header=TRUE, check.names = FALSE, row.names = 1)
+
+RGYBH_metadata<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_metadata.csv", header=TRUE, check.names = FALSE)
+
+RGYBH_good_samples <- colnames(RGYBH_otus[(colSums(decostand(RGYBH_otus,"pa")) >= 1)])
+RGYBH_otus <-RGYBH_otus[,RGYBH_good_samples]
+RGYBH_t_otus<-as.data.frame(t(RGYBH_otus))
+RGYBH_min_depth<-min(colSums(RGYBH_otus))
+RGYBH_t_otus_rarefied<-as.data.frame(round(rrarefy(RGYBH_t_otus,RGYBH_min_depth)))
+RGYBH_otus_dist = as.matrix(vegdist(RGYBH_t_otus_rarefied, "bray"))
+RGYBH_otus_dist_d = vegdist(RGYBH_t_otus_rarefied, "bray")
+RGYBH_NMDS_m = metaMDS(RGYBH_otus_dist)
+RGYBH_MDS1 <-RGYBH_NMDS_m$points[,1]
+RGYBH_MDS2<-RGYBH_NMDS_m$points[,2]
+RGYBH_NMDS_m$stress
+stressplot(RGYBH_NMDS_m)
+
+RGYBH_NMDS<-data.frame(RGYBH_MDS1=RGYBH_MDS1, RGYBH_MDS2=RGYBH_MDS2, Sample=RGYBH_metadata$Sample, Species=RGYBH_metadata$Species)
+RGYBH_NMDS
+
+RGYBH_labels<-data.frame(P= c("italic('P')==0.002"), Stress = c("italic('Stress')==0.08"), r2 = c("italic('r')^italic('2')==0.28"))
+
+RGYBH<-ggplot(RGYBH_NMDS, aes(x=RGYBH_MDS1,y=RGYBH_MDS2, col=Species, shape = Species)) + geom_point(size=3) + stat_ellipse(size=1.5)  + scale_colour_manual(values = c("black", "red")) + xlab("MDS1") +geom_text(aes(label = RGYBH_labels$P), x = 0.80, y = 0.71, size=4, color = "black", parse = TRUE, hjust = 0) + geom_text(aes(label = RGYBH_labels$r2), x = 0.80, y = 0.63, size = 4, color = "black", parse = TRUE, hjust = 0) + geom_text(aes(label = RGYBH_labels$Stress), x = 0.80, y = 0.55, size = 4, color = "black", parse = TRUE, hjust = 0) + theme_classic() + ylab("MDS2") + geom_text_repel(label = RGYBH_metadata$Sample)
+
+RGYBH<-RGYBH + theme(axis.text = element_text(size=14), axis.title = element_text(size=14))
+
+
+
+###Utilizing adonis to determine differences between groups###
+
+RGYBH_disper<-betadisper(RGYBH_otus_dist_d,  group = RGYBH_NMDS$Species)
+RGYBH_disper_permutest<-permutest(RGYBH_disper, group = RGYBH_NMDS$Species,  pairwise = TRUE, permutation = 999)
+
+RGYBH_disper_permutest
+
+adonis(formula = RGYBH_otus_dist ~ Species, data = RGYBH_metadata)
+adonis2(formula = RGYBH_otus_dist ~ Species, data = RGYBH_metadata)
+```
+
+For singleton RGYBH NMDS:
+
+```{r}
+
+RGYBH_singleton_otus<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_singleton_otutable_UPDATE.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RGYBH_singleton_good_samples <- colnames(RGYBH_singleton_otus[(colSums(decostand(RGYBH_otus,"pa")) >= 1)])
+RGYBH_singleton_otus <-RGYBH_singleton_otus[,RGYBH_singleton_good_samples]
+RGYBH_t_otus_singleton<-as.data.frame(t(RGYBH_singleton_otus))
+RGYBH_min_depth_singleton<-min(colSums(RGYBH_singleton_otus))
+RGYBH_min_depth_singleton
+RGYBH_t_otus_rarefied_singleton<-as.data.frame(round(rrarefy(RGYBH_t_otus_singleton,RGYBH_min_depth_singleton)))
+RGYBH_t_otus_dist_singleton<-as.matrix(RGYBH_t_otus_rarefied_singleton, "bray")
+RGYBH_NMDS_singleton_m = metaMDS(RGYBH_t_otus_dist_singleton)
+
+RGYBH_MDS1 <-RGYBH_NMDS_singleton_m$points[,1]
+RGYBH_MDS2<-RGYBH_NMDS_singleton_m$points[,2]
+RGYBH_NMDS_singleton_m$stress
+#0.07721164
+
+RGYBH_NMDS_singleton<-data.frame(MDS1=RGYBH_MDS1, MDS2=RGYBH_MDS2, Sample=RGYBH_metadata$Sample, Species=RGYBH_metadata$Species)
+
+RGYBH_sing_labels<-data.frame(P= c("italic('P')==0.003"), Stress = c("italic('Stress')==0.14"), r2 = c("italic('r')^italic('2')==0.28"))
+
+RGYBH_singleton<-ggplot(RGYBH_NMDS_singleton, aes(x=RGYBH_MDS1,y=RGYBH_MDS2, col=Species,  shape = Species)) + geom_point(size=3) + stat_ellipse(size=1.5) + scale_colour_manual(values = c("black", "red")) + xlab("MDS1") + geom_text(aes(label = RGYBH_sing_labels$P), x = 1.80, y = 1.75, size=4, color = "black", parse = TRUE, hjust = 0) + geom_text(aes(label = RGYBH_sing_labels$r2), x = 1.80, y = 1.63, size = 4, color = "black", parse = TRUE, hjust = 0) + geom_text(aes(label = RGYBH_sing_labels$Stress), x = 1.80, y = 1.49, size = 4, color = "black", parse = TRUE, hjust = 0) + theme_classic() + ylab("MDS2") + geom_text_repel(aes(label = RGYBH_metadata$Sample))
+                                                                                                     RGYBH_singleton<-RGYBH_singleton + theme(axis.text = element_text(size=14), axis.title = element_text(size=14))
+RGYBH_singleton
+adonis(formula = RGYBH_t_otus_dist_singleton ~ Species, data = RGYBH_metadata)
+
+#Procrustes test - verifying that singleton and non-singleton are significantly similar
+protest(RGYBH_NMDS_m, RGYBH_NMDS_singleton_m)
+#P-value < 0.001
+```
+
+
+RGYBH Good's Coverage Calculation (Table 1):
+
+First upload singleton data from USEARCH (See "Singleton RGYBH NMDS"):
+
+```{r}
+RGYBH_singleton_otus<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_singleton_otutable_UPDATE.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RGYBH_singleton_good_samples <- colnames(RGYBH_singleton_otus[(colSums(decostand(RGYBH_singleton_otus,"pa")) >= 1)])
+RGYBH_singleton_otus <-RGYBH_singleton_otus[,RGYBH_singleton_good_samples]
+RGYBH_t_otus_singleton<-as.data.frame(t(RGYBH_singleton_otus))
+RGYBH_min_depth_singleton<-min(colSums(RGYBH_singleton_otus))
+RGYBH_min_depth_singleton
+RGYBH_t_otus_rarefied_singleton<-as.data.frame(round(rrarefy(RGYBH_t_otus_singleton,RGYBH_min_depth_singleton)))
+```
+
+Then compute:
+```{r}
+RGYBH_singleton_otus
+RGYBH_otus_coverage<-data.frame(apply(RGYBH_t_otus_rarefied_singleton, 2, as.numeric))
+apply(RGYBH_otus_coverage, 2, Coverage)
+RGYBH_otus_coverage
+```
+
+Singleton RG Rarefaction (Fig 3A)
+Note Rarefaction data is processed as singleton!
+
+```{r}
+RG_data<-read.table("~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_otutableTESTgroups.rarefaction", header=TRUE)
+
+RGDataColumnsPrimary<-RG_data[grepl("use", names(RG_data))]
+RGnumSampled<-RG_data[, c("numsampled")]
+RG_data<-cbind (RGnumSampled, RGDataColumnsPrimary)
+RG_long<-melt(RG_data, id.vars="RGnumSampled")
+write.csv(RG_long, "RG_long.csv")
+
+###Offloaded RG_long --> add Location parameter column###
+
+###Reload into R###
+RG_long<-read.csv("~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_long_UPDATE.csv", header=TRUE)
+head(RG_long)
+```
+
+```{r}
+options(scipen=10000000)
+RG_rarefaction<-ggplot(data=RG_long, aes(x=RGnumSampled, y=value, color=Location)) + geom_line(aes(group=variable), size=1.5) + xlab("Number of Sequences") + ylab("OTUs (97% cutoff)") + guides (color=guide_legend("Location")) + theme_classic() + scale_color_manual(values = c("black", "red"))
+RG_rarefaction<-RG_rarefaction + theme(axis.text = element_text(size=14), axis.title = element_text(size=14))
+RG_rarefaction
+```
+
+RG - NMDS (Fig 3B)
+
+```{r}
+RG_otus<-read.csv("~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/Doubletons_RG_otutable_UPDATE.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RG_metadata<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_metadata.csv", header=TRUE, check.names = FALSE)
+RG_good_samples <- colnames(RG_otus[(colSums(decostand(RG_otus,"pa")) >= 1)])
+RG_otus <-RG_otus[,RG_good_samples]
+RG_t_otus<-as.data.frame(t(RG_otus))
+RG_min_depth<-min(colSums(RG_otus))
+RG_t_otus_rarefied<-as.data.frame(round(rrarefy(RG_t_otus,RG_min_depth)))
+RG_otus_dist = as.matrix(vegdist(RG_t_otus_rarefied, "bray"))
+RG_otus_dist_d = vegdist(RG_t_otus_rarefied, "bray")
+RG_NMDS_m = metaMDS(RG_otus_dist)
+RG_MDS1 <-RG_NMDS_m$points[,1]
+RG_MDS2<-RG_NMDS_m$points[,2]
+RG_NMDS_m$stress
+RG_NMDS<-data.frame(RG_MDS1=RG_MDS1, RG_MDS2=RG_MDS2, Sample=RG_metadata$Sample, Location=RG_metadata$Location)
+
+RG_labels<-data.frame(P= c("italic('P')==0.03"), Stress = c("italic('Stress')==0.04"), r2 = c("italic('r')^italic('2')==0.17"))
+
+RG<-ggplot(RG_NMDS, aes(x=RG_MDS1,y=RG_MDS2, col=Location, shape = Location)) + geom_point(size=3) + stat_ellipse(size=1.5) + geom_text(aes(label = RG_labels$Stress), x = 0.58, y = 0.65, size = 4, color = "black", parse =TRUE, hjust=0) + geom_text(aes(label = RG_labels$P), x = 0.58, y = 0.85, size = 4, color = "black", parse=TRUE, hjust=0) + geom_text(aes(label = RG_labels$r2), x = 0.58, y = 0.75, size = 4, color = "black", parse=TRUE, hjust=0) + ylab("MDS2") + theme_classic() +  geom_text_repel(aes(label = RG_metadata$Sample)) + scale_colour_manual(values=c("black", "red"))
+
+RG<-RG + theme(axis.text = element_text(size=14), axis.title = element_text(size=14))
+
+RG
+
+###Utilizing adonis to determine differences between groups###
+
+RG_disper<-betadisper(RG_otus_dist_d,  group = RG_NMDS$Location)
+RG_disper_permutest<-permutest(RG_disper, group = RG_NMDS$Location,  pairwise = TRUE, permutation = 999)
+
+RG_disper_permutest
+
+adonis(formula = RG_otus_dist ~ Location, data = RG_metadata)
+```
+
+RG singleton NMDS:
+
+```{r}
+RG_singleton_otus<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_singleton_otutable_UPDATE.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RG_good_sample_singleton_otu<-colnames(RG_singleton_otus[(colSums(decostand(RG_singleton_otus,"pa")) >= 1)])
+RG_singleton_otus <-RG_singleton_otus[,RG_good_sample_singleton_otu]
+RG_t_otus_singleton<-as.data.frame(t(RG_singleton_otus))
+RG_min_depth_singleton<-min(colSums(RG_singleton_otus))
+RG_t_otus_rarefied_singleton<-as.data.frame(round(rrarefy(RG_t_otus_singleton,RG_min_depth_singleton)))
+RG_t_otus_dist_singleton<-as.matrix(vegdist(RG_t_otus_rarefied_singleton, "bray"))
+RG_singleton_NMDS_m = metaMDS(RG_t_otus_dist_singleton)
+RG_MDS1 <-RG_singleton_NMDS_m$points[,1]
+RG_MDS2<-RG_singleton_NMDS_m$points[,2]
+RG_singleton_NMDS_m$stress
+#0.04258361
+
+RG_singleton_NMDS<-data.frame(MDS1=RG_MDS1, MDS2=RG_MDS2, Sample=RG_metadata$Sample, Location=RG_metadata$Location)
+
+RG_sing_labels<-data.frame(P= c("italic('P')==0.03"), Stress = c("italic('Stress')==0.04"), r2 = c("italic('r')^italic('2')==0.17"))
+
+RG_singleton<-ggplot(RG_singleton_NMDS, aes(x=RG_MDS1,y=RG_MDS2, col=Location, shape = Location)) + geom_point(size=3) + stat_ellipse(size=1.5) + geom_text(aes(label = RG_sing_labels$Stress), x = 0.58, y = 0.65, size = 4, color = "black", parse=TRUE, hjust=0) + geom_text(aes(label = RG_sing_labels$P), x = 0.58, y = 0.85, size = 4, color = "black", parse=TRUE, hjust=0) + geom_text(aes(label = RG_sing_labels$r2), x = 0.58, y = 0.75, size = 4, color = "black", parse=TRUE, hjust=0) + theme_classic() +  geom_text_repel(aes(label = RG_metadata$Sample)) + scale_colour_manual(values=c("black", "red")) + xlab("MDS1") + ylab("MDS2")
+
+RG_singleton<-RG_singleton + theme(axis.text = element_text(size=14), axis.title = element_text(size=14))
+
+RG_singleton
+
+adonis(formula = RG_t_otus_dist_singleton ~ Location, data = RG_metadata)
+
+#Procrustes test - verifying that singleton and non-singleton are significantly similar
+protest(RG_NMDS_m, RG_singleton_NMDS_m)
+#P-value < 0.001
+```
+
+RG Good's Coverage Calculation (Table 2):
+
+First upload singleton OTU data from USEARCH (See "RG Singleton NMDS"):
+
+```{r}
+RG_singleton_otus<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_singleton_otutable_UPDATE.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RG_good_sample_singleton_otu<-colnames(RG_singleton_otus[(colSums(decostand(RG_singleton_otus,"pa")) >= 1)])
+RG_singleton_otus <-RG_singleton_otus[,RG_good_sample_singleton_otu]
+RG_t_otus_singleton<-as.data.frame(t(RG_singleton_otus))
+RG_min_depth_singleton<-min(colSums(RG_singleton_otus))
+RG_t_otus_rarefied_singleton<-as.data.frame(round(rrarefy(RG_t_otus_singleton,RG_min_depth_singleton)))
+```
+
+
+Then compute:
+```{r}
+RG_singleton_otus
+RG_otus_coverage<-data.frame(apply(RG_t_otus_rarefied_singleton, 1, as.numeric))
+apply(RG_otus_coverage, 2, Coverage)
+RG_otus_coverage
+```
+
+
+Determining slope & richness from rarefaction curves (RGYBH group) (Table S1):
+
+```{r}
+###slope of singleton rarefaction curves at normalized sequencing depth###
+RGYBH_otus_transformed<-t(RGYBH_singleton_otus)
+rareslope(RGYBH_otus_transformed, 41249) * 1000
+
+###you have to subtract one from minimum depth or else lowest sequence will give slope=0)###
+
+###Calculating Richness at normalized & maximum sequencing depth / sample###
+rarefy(RGYBH_t_otus_rarefied_singleton, min(rowSums(RGYBH_t_otus_rarefied_singleton)), se = FALSE, MARGIN = 1)
+
+###Calculating total species richness###
+specnumber(RGYBH_otus_transformed)
+```
+
+Determining slope & richness from rarefaction curves (RG group) (Table S2):
+
+```{r}
+###slope of singleton rarefaction curves at normalized sequencing depth###
+RG_otus_transformed<-t(RG_singleton_otus)
+rareslope(RG_otus_transformed, 40971) * 1000
+
+###you have to subtract one from minimum depth or else lowest sequence will give slope=0)###
+
+###Calculating Richness at normalized & maximum sequencing depth / sample###
+rarefy(RG_t_otus_rarefied_singleton, min(rowSums(RG_t_otus_rarefied_singleton)), se = FALSE, MARGIN = 1)
+
+###Calculating total species richness###
+specnumber(RG_otus_transformed)
+```
+
+
+RG + RGYBH Phyloseq Objects (Normalized)
+```{r}
+#RGYBH
+#Carry over rarefied OTU table from NMDS analyses above
+
+RGYBH_t_otus_rarefied_singleton_t_FINAL<-(t(RGYBH_t_otus_rarefied_singleton))
+
+RGYBH_PilotData_FINAL<-as.matrix(RGYBH_t_otus_rarefied_singleton_t_FINAL)
+RGYBH_PilotData_FINAL_otu<-otu_table(RGYBH_PilotData_FINAL, taxa_are_rows = TRUE)
+
+RGYBH_PilotData_FINAL_metadata<-read.csv(file ="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_metadata.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RGYBH_PilotData_FINAL_metadata<-sample_data(RGYBH_PilotData_FINAL_metadata)
+
+RGYBH_PilotData_FINAL_taxa<-read.csv(file ="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_taxa_SILVA.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RGYBH_PilotData_FINAL_taxa<-as.matrix(RGYBH_PilotData_FINAL_taxa)
+RGYBH_PilotData_FINAL_taxa_Phylo<-tax_table(RGYBH_PilotData_FINAL_taxa)
+RGYBH_PilotData_FINAL_Phylo<-phyloseq(RGYBH_PilotData_FINAL_otu, RGYBH_PilotData_FINAL_taxa_Phylo, RGYBH_PilotData_FINAL_metadata)
+
+RGYBH_PilotData_FINAL_melted<-tax_glom(RGYBH_PilotData_FINAL_Phylo, "Genus")
+write.csv(otu_table(RGYBH_PilotData_FINAL_melted), "RGYBH_PilotData_FINAL_melted.csv")
+
+RGYBH_tree<-rtree(ntaxa(RGYBH_PilotData_FINAL_melted), rooted = TRUE, tip.label = taxa_names(RGYBH_PilotData_FINAL_melted))
+
+RGYBH_PilotData_FINAL_melted<-merge_phyloseq(RGYBH_PilotData_FINAL_melted, RGYBH_tree)
+
+RGYBH_PilotData_FINAL_melted
+
+#RG
+#Carry over rarefied OTU table from NMDS analyses above
+
+RG_t_otus_rarefied_singleton_t_FINAL<-(t(RG_t_otus_rarefied_singleton))
+
+RG_PilotData_FINAL<-as.matrix(RG_t_otus_rarefied_singleton_t_FINAL)
+RG_PilotData_FINAL_otu<-otu_table(RG_PilotData_FINAL, taxa_are_rows = TRUE)
+
+RG_PilotData_FINAL_metadata<-read.csv(file ="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_metadata.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RG_PilotData_FINAL_metadata<-sample_data(RG_PilotData_FINAL_metadata)
+
+RG_PilotData_FINAL_taxa<-read.csv(file ="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/Silva_RG_ALL_OTU_taxa.csv", header = TRUE, check.names = FALSE, row.names = 1)
+
+RG_PilotData_FINAL_taxa<-as.matrix(RG_PilotData_FINAL_taxa)
+RG_PilotData_FINAL_taxa_Phylo<-tax_table(RG_PilotData_FINAL_taxa)
+RG_PilotData_FINAL_Phylo<-phyloseq(RG_PilotData_FINAL_otu, RG_PilotData_FINAL_taxa_Phylo, RG_PilotData_FINAL_metadata)
+
+RG_PilotData_FINAL_melted<-tax_glom(RG_PilotData_FINAL_Phylo, "Genus")
+write.csv(otu_table(RG_PilotData_FINAL_melted), "RGYBH_PilotData_FINAL_melted.csv")
+
+RG_tree<-rtree(ntaxa(RG_PilotData_FINAL_melted), rooted = TRUE, tip.label = taxa_names(RG_PilotData_FINAL_melted))
+
+RG_PilotData_FINAL_melted<-merge_phyloseq(RG_PilotData_FINAL_melted, RG_tree)
+
+RG_PilotData_FINAL_melted
+```
+
+
+Top 10 taxonomic analysis (using SILVA database)
+```{r}
+#RGYBH - Species Comparison
+
+RGYBH_taxa_top10<-names(sort(taxa_sums(RGYBH_PilotData_FINAL_melted), decreasing = TRUE)) [1:10]
+RGYBH_taxa_Phylo.top10<-transform_sample_counts(RGYBH_PilotData_FINAL_melted, function(RGYBH_PilotData_FINAL_melted) RGYBH_PilotData_FINAL_melted/sum(RGYBH_PilotData_FINAL_melted))
+RGYBH_PilotData_FINAL_Phylo.top10<-prune_taxa(RGYBH_taxa_top10, RGYBH_taxa_Phylo.top10)
+
+RGYBH_PilotData_FINAL_Top10<-plot_bar(RGYBH_PilotData_FINAL_Phylo.top10, x = "Species", fill = "Genus") + scale_fill_brewer(palette = "Paired") + theme_classic()
+
+RGYBH_PilotData_FINAL_Top10 + geom_bar(aes(fill=Genus), stat="identity", position = "stack") +  scale_fill_brewer(palette = "Paired")
+
+write.csv(otu_table(RGYBH_PilotData_FINAL_Phylo.top10), "RGYBH_PilotData_FINAL_Phylo.top10.csv")
+#Offload Top10 ASV data - calculate average for each group so that y-axis = 0-1 (e.g. 0 - 100%). Also calculate SE and reupload data.
+
+
+###Code for barplot coloring scheme
+
+Barplot_Palette<-function (n) 
+{
+    x <- ramp(seq.int(0, 1, length.out = n))
+    if (ncol(x) == 4L) 
+        rgb(x[, 1L], x[, 2L], x[, 3L], x[, 4L], maxColorValue = 255)
+    else rgb(x[, 1L], x[, 2L], x[, 3L], maxColorValue = 255)
+}
+
+RGYBH_taxa_percent<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_taxa_percent.csv", header=TRUE, check.names = FALSE)
+
+RGYBH_taxa_percent$Average<-RGYBH_taxa_percent$Average*100
+RGYBH_taxa_percent$SE<-RGYBH_taxa_percent$SE*100
+
+colourCount<-length(unique(RGYBH_taxa_percent$Genus))
+getPalette<-colorRampPalette(brewer.pal(8, "Set1"))
+
+RGYBH_taxa_percent_Graph<-ggplot(RGYBH_taxa_percent, aes(x=Species, y = Average, fill = Genus)) + geom_bar(colour = "black", stat = "identity", position = position_dodge()) + theme_classic() + scale_fill_manual(values = getPalette(colourCount)) + labs(title = "Round Goby and Yellow Bullhead Gut Microbiota", subtitle = "Top 10 Bacterial Genera", x = "", y = "Relative OTU Abundance (%)")+ theme(axis.text.x = element_text(angle = 45, hjust = 1)) + geom_errorbar(aes(ymin=Average-SE, ymax = Average+SE), width=.2, position=position_dodge(.9))
+
+RGYBH_taxa_percent_Graph<-RGYBH_taxa_percent_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"),legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+
+#RG
+
+RG_taxa_top10<-names(sort(taxa_sums(RG_PilotData_FINAL_melted), decreasing = TRUE)) [1:10]
+RG_taxa_Phylo.top10<-transform_sample_counts(RG_PilotData_FINAL_melted, function(RG_PilotData_FINAL_melted) RG_PilotData_FINAL_melted/sum(RG_PilotData_FINAL_melted))
+RG_PilotData_FINAL_Phylo.top10<-prune_taxa(RG_taxa_top10, RG_taxa_Phylo.top10)
+
+RG_PilotData_FINAL_Top10<-plot_bar(RG_PilotData_FINAL_Phylo.top10, x = "Location", fill = "Genus") + scale_fill_brewer(palette = "Paired") + theme_classic()
+
+RG_PilotData_FINAL_Top10 + geom_bar(aes(fill=Genus), stat="identity", position = "stack") +  scale_fill_brewer(palette = "Paired")
+
+write.csv(otu_table(RG_PilotData_FINAL_Phylo.top10), "RG_PilotData_FINAL_Phylo.top10.csv")
+#Offload Top10 OTU data - calculate average for each group so that y-axis = 0-1 (e.g. 0 - 100%). Also calculate SE and reupload data.
+
+RG_taxa_percent<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_taxa_percent.csv", header=TRUE, check.names = FALSE)
+
+RG_taxa_percent$Average<-RG_taxa_percent$Average*100
+RG_taxa_percent$SE<-RG_taxa_percent$SE*100
+
+colourCount<-length(unique(RG_taxa_percent$Genus))
+getPalette<-colorRampPalette(brewer.pal(8, "Set1"))
+
+RG_taxa_percent_Graph<-ggplot(RG_taxa_percent, aes(x=Location, y = Average, fill = Genus)) + geom_bar(colour = "black", stat = "identity", position = position_dodge()) + theme_classic() + scale_fill_manual(values = getPalette(colourCount)) + labs(title = "Round Goby Gut Microbiota", subtitle = "Top 10 Bacterial Genera by Location", x = "", y = "Relative OTU Abundance (%)")+ theme(axis.text.x = element_text(angle = 45, hjust = 1)) + geom_errorbar(aes(ymin=Average-SE, ymax = Average+SE), width=.2, position=position_dodge(.9))
+
+RG_taxa_percent_Graph<-RG_taxa_percent_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"),legend.text = element_text(size=14), legend.title = element_text(size=14))
+```
+
+#Alpha Diversity Analysis
+
+##Observed, Chao1, Shannon
+```{r}
+###Phyloseq Object from taxa analysis carried over###
+
+###RGYBH
+
+RGYBH_Phylo_Alpha<-prune_taxa(taxa_sums(RGYBH_PilotData_FINAL_melted) > 0, RGYBH_PilotData_FINAL_melted)
+
+plot_richness(RGYBH_Phylo_Alpha, x = "Species", measures = c("Observed", "Chao1","Shannon")) + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text = element_text(size=14), axis.title = element_text(size=14),plot.title = element_text(size = 14, face = "bold"))
+
+RGYBH_Alpha<-estimate_richness(RGYBH_PilotData_FINAL_melted, split = TRUE, measures = c("Observed", "Chao1", "Shannon"))
+
+RGYBH_Alpha$Species<-RGYBH_NMDS_singleton$Species
+head(RGYBH_Alpha)
+
+pairwise.wilcox.test(RGYBH_Alpha$Observed, sample_data(RGYBH_Phylo_Alpha)$Species, p.adjust.method = "BH")
+
+pairwise.wilcox.test(RGYBH_Alpha$Chao1, sample_data(RGYBH_Phylo_Alpha)$Species, p.adjust.method = "BH")
+
+pairwise.wilcox.test(RGYBH_Alpha$Shannon, sample_data(RGYBH_Phylo_Alpha)$Species, p.adjust.method = "BH")
+
+
+#RG
+
+RG_Phylo_Alpha<-prune_taxa(taxa_sums(RG_PilotData_FINAL_melted) > 0, RG_PilotData_FINAL_melted)
+
+RG_Alpha_graph<-plot_richness(RG_Phylo_Alpha, x = "Location", measures = c("Observed", "Chao1","Shannon")) + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text = element_text(size=14), axis.title = element_text(size=14),plot.title = element_text(size = 14, face = "bold"))
+
+RG_Alpha_graph + geom_text(aes(label = "test"), x = 1, y = 1)
+
+RG_Alpha<-estimate_richness(RG_PilotData_FINAL_melted, split = TRUE, measures = c("Observed", "Chao1", "Shannon"))
+
+RG_Alpha$Location<-RG_singleton_NMDS$Location
+head(RG_Alpha)
+
+pairwise.wilcox.test(RG_Alpha$Observed, sample_data(RG_Phylo_Alpha)$Location, p.adjust.method = "BH")
+
+pairwise.wilcox.test(RG_Alpha$Chao1, sample_data(RG_Phylo_Alpha)$Location, p.adjust.method = "BH")
+
+pairwise.wilcox.test(RG_Alpha$Shannon, sample_data(RG_Phylo_Alpha)$Location, p.adjust.method = "BH")
+```
+
+UniFrac distances (comparing distance between fish gut microbiota by species and within RG by location)
+
+```{r}
+RGYBH_unifrac<-UniFrac(RGYBH_PilotData_FINAL_melted, weighted = TRUE, normalized = TRUE, parallel = FALSE, fast = TRUE)
+RGYBH_unifrac_m<-as.matrix(RGYBH_unifrac)
+write.csv(RGYBH_unifrac_m, "RGYBH_m.csv")
+
+
+#Offloaded Unifrac data matrix is manipulated to isolate all combinations of fish and water samples. This is done on .csv file "Unifrac_Comparison.csv" where "C_C" = Cranberry water vs. Cranberry fish, "C_F" = Cranberry water vs. French fish, "F_F" = French water vs. French fish, "F_C" = French water vs. Cranberry fish.
+
+RGYBH_Unifrac_Analysis<-read.csv(file="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_Unifrac_Comparison.csv", header=TRUE, check.names =FALSE)
+
+
+#Check for comparison normality
+
+shapiro.test(RGYBH_Unifrac_Analysis$R_R)
+shapiro.test(RGYBH_Unifrac_Analysis$R_Y)
+shapiro.test(RGYBH_Unifrac_Analysis$Y_Y)
+
+
+#Welchs's t-tests
+
+t.test(RGYBH_Unifrac_Analysis$R_R, RGYBH_Unifrac_Analysis$R_Y, var.equal = FALSE, paired = FALSE)
+t.test(RGYBH_Unifrac_Analysis$R_R, RGYBH_Unifrac_Analysis$Y_Y, var.equal = FALSE, paired = FALSE)
+t.test(RGYBH_Unifrac_Analysis$R_Y, RGYBH_Unifrac_Analysis$Y_Y, var.equal = FALSE, paired = FALSE)
+
+
+#Unifrac bar plot
+
+RGYBH_Unifrac_barplot_csv<-read.csv(file="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_Unifrac_barplot.csv", header=TRUE, check.names =FALSE)
+
+RGYBH_Unifrac_barplot<-ggplot(RGYBH_Unifrac_barplot_csv, aes(x=Pairwise_Comparison, y = Distance)) + geom_bar(colour = "black", stat="identity", position = position_dodge()) + ylim (0, 0.9) + theme_classic() + labs(title = "Pairwise UniFrac Distances", subtitle = "Round Goby vs. Yellow Bullhead", x = "", y = "Weighted UniFrac Distance") + scale_fill_manual(values = c("gray", "gray", "gray", "gray")) +  geom_errorbar(aes(ymin=Distance-SE, ymax = Distance+SE), width=.2, position=position_dodge(.9)) + geom_text(aes(label = "A"), x = 0.95, y = 0.7, hjust = 0, colour = "black", size = 7) + geom_text(aes(label = "B"), x = 1.95, y = 0.7, hjust = 0, colour = "black", size = 7)+ geom_text(aes(label = "A"), x = 2.95, y = 0.7, hjust = 0, colour = "black", size = 7)+ geom_text(aes(label = "C"), x = 3.95, y = 0.815, hjust = 0, colour = "black", size = 7)
+
+RGYBH_Unifrac_barplot
+
+
+#RG
+
+RG_unifrac<-UniFrac(RG_PilotData_FINAL_melted, weighted = TRUE, normalized = TRUE, parallel = FALSE, fast = TRUE)
+RG_unifrac_m<-as.matrix(RG_unifrac)
+write.csv(RG_unifrac_m, "RG_m.csv")
+
+
+#Offloaded Unifrac data matrix is manipulated to isolate all combinations of fish and water samples. This is done on .csv file "Unifrac_Comparison.csv" where "C_C" = Cranberry water vs. Cranberry fish, "C_F" = Cranberry water vs. French fish, "F_F" = French water vs. French fish, "F_C" = French water vs. Cranberry fish.
+
+RG_Unifrac_Analysis<-read.csv(file="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_Unifrac_Comparison.csv", header=TRUE, check.names =FALSE)
+
+
+#Check for comparison normality
+
+shapiro.test(RG_Unifrac_Analysis$G_G)
+shapiro.test(RG_Unifrac_Analysis$G_E)
+shapiro.test(RG_Unifrac_Analysis$E_E)
+
+
+#Welchs's t-tests
+
+t.test(RG_Unifrac_Analysis$G_G, RG_Unifrac_Analysis$G_E, var.equal = FALSE, paired = FALSE)
+t.test(RG_Unifrac_Analysis$G_G, RG_Unifrac_Analysis$E_E, var.equal = FALSE, paired = FALSE)
+t.test(RG_Unifrac_Analysis$E_E, RG_Unifrac_Analysis$G_E, var.equal = FALSE, paired = FALSE)
+
+
+#Unifrac bar plot
+
+RG_Unifrac_barplot_csv<-read.csv(file="~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_Unifrac_barplot.csv", header=TRUE, check.names =FALSE)
+
+RG_Unifrac_barplot<-ggplot(RG_Unifrac_barplot_csv, aes(x=Pairwise_Comparison, y = Distance)) + geom_bar(colour = "black", stat="identity", position = position_dodge()) + ylim (0, 0.9) + theme_classic() + labs(title = "Pairwise UniFrac Distances", subtitle = "Governor's Island vs. Eagle Wings", x = "", y = "Weighted UniFrac Distance") + scale_fill_manual(values = c("gray", "gray", "gray", "gray")) +  geom_errorbar(aes(ymin=Distance-SE, ymax = Distance+SE), width=.2, position=position_dodge(.9)) + geom_text(aes(label = "A"), x = 0.95, y = 0.7, hjust = 0, colour = "black", size = 7) + geom_text(aes(label = "B"), x = 1.95, y = .7, hjust = 0, colour = "black", size = 7)+ geom_text(aes(label = "C"), x = 2.95, y = 0.7, hjust = 0, colour = "black", size = 7)+ geom_text(aes(label = "C"), x = 3.95, y = 0.815, hjust = 0, colour = "black", size = 7)
+
+RG_Unifrac_barplot
+
+```
+
+
+#Tax4Fun Analysis -  Predicting Microbial Functions based on Community Composition
+##Site vs. Site
+
+Determine Microbe Functions with Tax4Fun
+
+```{r}
+###RGYBH
+
+#Normalized RGYBH otu table pulled from above
+
+RGYBH_Tax4Fun_OTUs<-otu_table(RGYBH_PilotData_FINAL, taxa_are_rows = TRUE)
+
+RGYBH_Tax4Fun_OTUs_t<-as.data.frame(t(RGYBH_Tax4Fun_OTUs))
+RGYBH_Tax4Fun_OTUs_m<-as.matrix(RGYBH_Tax4Fun_OTUs_t)
+RGYBH_Tax4Fun_OTUs_list<-list(RGYBH_Tax4Fun_OTUs_m, RGYBH_PilotData_FINAL_taxa)
+names(RGYBH_Tax4Fun_OTUs_list)<-paste("name", 1:2, sep="")
+tmp<-tempdir()
+download_ref(tmp,reference='silva_ko',overwrite=FALSE)
+
+RGYBH_FUNCTIONS <- t4f(RGYBH_Tax4Fun_OTUs_list$name1, rows_are_taxa=FALSE, tax_table = RGYBH_Tax4Fun_OTUs_list$name2, reference_path = tmp, type = 'uproc', short=TRUE, cn_normalize = TRUE, sample_normalize =TRUE, drop=TRUE)
+
+write.csv(RGYBH_FUNCTIONS$fxn_table, "RGYBH_FUNCTIONS_FXN_TABLE.csv")
+write.csv(RGYBH_FUNCTIONS$method_meta, "RGYBH_FUNCTIONS_METHOD_META.csv")
+write.csv(RGYBH_FUNCTIONS$fxn_meta$KEGG_Description, "RGYBH_FUNCTIONS_FXN_META_KEGG_DESCRIPTION.csv")
+write.csv(RGYBH_FUNCTIONS$fxn_meta$KEGG_Pathways, "RGYBH_FUNCTIONS_FXN_META_KEGG_PATHWAYS.csv")
+
+
+###RG
+
+RG_Tax4Fun_OTUs<-otu_table(RG_PilotData_FINAL, taxa_are_rows = TRUE)
+
+RG_Tax4Fun_OTUs_t<-as.data.frame(t(RG_Tax4Fun_OTUs))
+RG_Tax4Fun_OTUs_m<-as.matrix(RG_Tax4Fun_OTUs_t)
+RG_Tax4Fun_OTUs_list<-list(RG_Tax4Fun_OTUs_m, RG_PilotData_FINAL_taxa)
+names(RG_Tax4Fun_OTUs_list)<-paste("name", 1:2, sep="")
+tmp<-tempdir()
+download_ref(tmp,reference='silva_ko',overwrite=FALSE)
+
+RG_FUNCTIONS <- t4f(RG_Tax4Fun_OTUs_list$name1, rows_are_taxa=FALSE, tax_table = RG_Tax4Fun_OTUs_list$name2, reference_path = tmp, type = 'uproc', short=TRUE, cn_normalize = TRUE, sample_normalize =TRUE, drop=TRUE)
+
+write.csv(RG_FUNCTIONS$fxn_table, "RG_FUNCTIONS_FXN_TABLE.csv")
+write.csv(RG_FUNCTIONS$method_meta, "RG_FUNCTIONS_METHOD_META.csv")
+write.csv(RG_FUNCTIONS$fxn_meta$KEGG_Description, "RG_FUNCTIONS_FXN_META_KEGG_DESCRIPTION.csv")
+write.csv(RG_FUNCTIONS$fxn_meta$KEGG_Pathways, "RG_FUNCTIONS_FXN_META_KEGG_PATHWAYS.csv")
+```
+
+Function Bar Graph (Top 20 KO's):
+
+```{r}
+###RGYBH###
+
+###Determine's Top 20 KO Hits - Fill out RGYBH_Tax4Fun_Analysis_ForR.csv with average OTU Relative abundance values (+/- SE), remove KO's with unknown KEGG pathways, and combine simialr pathways based on level 1 KEGG description (include level 2 in parentheses). For metabolic KOs, group all as "Metabolic Pathways".
+
+
+#Environmental Signal Processing
+
+RGYBH_ENV_Proc<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_Tax4Fun_Env_Sig.csv", header=TRUE, check.names =FALSE)
+
+
+RGYBH_Env_Sig_Graph<-ggplot(data = RGYBH_ENV_Proc, aes(x = Pathways, y =AVG, fill = Species)) + geom_bar(stat="identity", color = "black", position = position_dodge()) + labs (title = "Tax4Fun Microbial Function Predictions", subtitle = "Environmental Information Processing", y = "Relative Gene Abundance", x = "") + theme(axis.text.y = element_text(size =7)) + geom_errorbar(aes(ymin=AVG-SE, ymax=AVG+SE), width=.2, position=position_dodge(0.9)) + theme_classic() + theme(axis.ticks.x.bottom = element_blank()) + theme(axis.text.x = element_blank()) + scale_fill_manual(values = c("darkslategray2", "darkgoldenrod4"))
+
+RGYBH_Env_Sig_Graph<-RGYBH_Env_Sig_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"), legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+#Cellular Processes
+
+RGYBH_Cell_Proc<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_Tax4Fun_Cell.csv", header=TRUE, check.names =FALSE)
+
+RGYBH_Cell_Sig_Graph<-ggplot(data = RGYBH_Cell_Proc, aes(x = Pathways, y =AVG, fill = Species)) + geom_bar(stat="identity", color = "black", position = position_dodge()) + labs (title = "Tax4Fun Microbial Function Predictions", subtitle = "Cellular Processes", y = "Relative Gene Abundance", x = "") + theme(axis.text.y = element_text(size =7)) + geom_errorbar(aes(ymin=AVG-SE, ymax=AVG+SE), width=.2, position=position_dodge(0.9)) + theme_classic() + theme(axis.ticks.x.bottom = element_blank()) + theme(axis.text.x = element_blank()) + scale_fill_manual(values = c("darkslategray2", "darkgoldenrod4"))
+
+RGYBH_Cell_Sig_Graph<-RGYBH_Cell_Sig_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"), legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+#Metabolic Pathways
+
+RGYBH_metab<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_Tax4Fun_Metabolism.csv", header=TRUE, check.names =FALSE)
+
+
+RGYBH_metab_Graph<-ggplot(data = RGYBH_metab, aes(x = Pathways, y =AVG, fill = Species)) + geom_bar(stat="identity", color = "black", position = position_dodge()) + labs (title = "Tax4Fun Microbial Function Predictions", subtitle = "Metabolism", y = "Relative Gene Abundance", x = "") + theme(axis.text.y = element_text(size =7)) + geom_errorbar(aes(ymin=AVG-SE, ymax=AVG+SE), width=.2, position=position_dodge(0.9)) + theme_classic() + theme(axis.ticks.x.bottom = element_blank()) + theme(axis.text.x = element_blank()) + scale_fill_manual(values = c("darkslategray2", "darkgoldenrod4"))
+
+RGYBH_metab_Graph<-RGYBH_metab_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"), legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+#Genetic Information Processing
+
+RGYBH_Gen<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_Tax4Fun_Genetic.csv", header=TRUE, check.names =FALSE)
+
+
+RGYBH_Gen_Graph<-ggplot(data = RGYBH_Gen, aes(x = Pathways, y =AVG, fill = Species)) + geom_bar(stat="identity", color = "black", position = position_dodge()) + labs (title = "Tax4Fun Microbial Function Predictions", subtitle = "Genetic Information Processing", y = "Relative Gene Abundance", x = "") + theme(axis.text.y = element_text(size =7)) + geom_errorbar(aes(ymin=AVG-SE, ymax=AVG+SE), width=.2, position=position_dodge(0.9)) + theme_classic() + theme(axis.ticks.x.bottom = element_blank()) + theme(axis.text.x = element_blank()) + scale_fill_manual(values = c("darkslategray2", "darkgoldenrod4"))
+
+RGYBH_Gen_Graph<-RGYBH_Gen_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"), legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+#ALL
+ggarrange(RGYBH_Env_Sig_Graph, RGYBH_Cell_Sig_Graph, RGYBH_metab_Graph, RGYBH_Gen_Graph, ncol=2, nrow=2, common.legend = TRUE, legend = c("right"))
+
+
+###RG###
+
+###Determine's Top 20 KO Hits - Fill out RGYBH_Tax4Fun_Analysis_ForR.csv with average OTU Relative abundance values (+/- SE), remove KO's with unknown KEGG pathways, and combine simialr pathways based on level 1 KEGG description (include level 2 in parentheses). For metabolic KOs, group all as "Metabolic Pathways".
+
+
+#Environmental Signal Processing
+
+RG_ENV_Proc<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_Tax4Fun_Env_Sig.csv", header=TRUE, check.names =FALSE)
+
+
+RG_Env_Sig_Graph<-ggplot(data = RG_ENV_Proc, aes(x = Pathways, y =AVG, fill = Location)) + geom_bar(stat="identity", color = "black", position = position_dodge()) + labs (title = "Tax4Fun Microbial Function Predictions", subtitle = "Environmental Information Processing", y = "Relative Gene Abundance", x = "") + theme(axis.text.y = element_text(size =7)) + geom_errorbar(aes(ymin=AVG-SE, ymax=AVG+SE), width=.2, position=position_dodge(0.9)) + theme_classic() + theme(axis.ticks.x.bottom = element_blank()) + theme(axis.text.x = element_blank()) + scale_fill_manual(values = c("darkslategray2", "darkgoldenrod4"))
+
+RG_Env_Sig_Graph<-RG_Env_Sig_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"), legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+#Cellular Processes
+
+RG_Cell_Proc<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_Tax4Fun_Cellular.csv", header=TRUE, check.names =FALSE)
+
+RG_Cell_Sig_Graph<-ggplot(data = RG_Cell_Proc, aes(x = Pathways, y =AVG, fill = Location)) + geom_bar(stat="identity", color = "black", position = position_dodge()) + labs (title = "Tax4Fun Microbial Function Predictions", subtitle = "Cellular Processes", y = "Relative Gene Abundance", x = "") + theme(axis.text.y = element_text(size =7)) + geom_errorbar(aes(ymin=AVG-SE, ymax=AVG+SE), width=.2, position=position_dodge(0.9)) + theme_classic() + theme(axis.ticks.x.bottom = element_blank()) + theme(axis.text.x = element_blank()) + scale_fill_manual(values = c("darkslategray2", "darkgoldenrod4"))
+
+RG_Cell_Sig_Graph<-RGYBH_Cell_Sig_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"), legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+#Metabolic Pathways
+
+RG_metab<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_Tax4Fun_Metabolism.csv", header=TRUE, check.names =FALSE)
+
+
+RG_metab_Graph<-ggplot(data = RG_metab, aes(x = Pathways, y =AVG, fill = Location)) + geom_bar(stat="identity", color = "black", position = position_dodge()) + labs (title = "Tax4Fun Microbial Function Predictions", subtitle = "Metabolism", y = "Relative Gene Abundance", x = "") + theme(axis.text.y = element_text(size =7)) + geom_errorbar(aes(ymin=AVG-SE, ymax=AVG+SE), width=.2, position=position_dodge(0.9)) + theme_classic() + theme(axis.ticks.x.bottom = element_blank()) + theme(axis.text.x = element_blank()) + scale_fill_manual(values = c("darkslategray2", "darkgoldenrod4"))
+
+RG_metab_Graph<-RG_metab_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"), legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+#Genetic Information Processing
+
+RG_Gen<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_Tax4Fun_Genetic.csv", header=TRUE, check.names =FALSE)
+
+
+RG_Gen_Graph<-ggplot(data = RG_Gen, aes(x = Pathways, y =AVG, fill = Location)) + geom_bar(stat="identity", color = "black", position = position_dodge()) + labs (title = "Tax4Fun Microbial Function Predictions", subtitle = "Genetic Information Processing", y = "Relative Gene Abundance", x = "") + theme(axis.text.y = element_text(size =7)) + geom_errorbar(aes(ymin=AVG-SE, ymax=AVG+SE), width=.2, position=position_dodge(0.9)) + theme_classic() + theme(axis.ticks.x.bottom = element_blank()) + theme(axis.text.x = element_blank()) + scale_fill_manual(values = c("darkslategray2", "darkgoldenrod4"))
+
+RG_Gen_Graph<-RG_Gen_Graph+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14), plot.title = element_text(size = 14, face = "bold"), legend.text = element_text(size=14), legend.title = element_text(size=14))
+
+#ALL
+ggarrange(RG_Env_Sig_Graph, RG_Cell_Sig_Graph, RG_metab_Graph, RG_Gen_Graph, ncol=2, nrow=2, common.legend = TRUE, legend = c("right"))
+```
+
+Significance per KO between Locations
+
+```{r}
+###RGYBH###
+
+#Export Data for Top KO's that map to a specified pathway
+#File name = CH_2_KO_Env_Processing.csv
+
+RGYBH_Tax4Fun_Significance<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG_YBH/RGYBH_KO_Significance.csv", header=TRUE, check.names =FALSE)
+
+RGYBH_T4F_RG<-subset(RGYBH_Tax4Fun_Significance, Species == "Round Goby")
+RGYBH_T4F_YBH<-subset(RGYBH_Tax4Fun_Significance, Species == "Yellow Bullhead")
+
+#Environmental Information Processing
+#Welch's Two Sample t-test (Species vs. Pathway)
+
+t_test_Env<-t.test(RGYBH_T4F_RG$Environmental, RGYBH_T4F_YBH$Environmental, var.equal = FALSE, paired=FALSE)
+
+t_test_Env
+
+#Cellular Processes
+#Welch's Two Sample t-test (Species vs. Pathway)
+
+t_test_Cell<-t.test(RGYBH_T4F_RG$Cellular, RGYBH_T4F_YBH$Cellular, var.equal = FALSE, paired=FALSE)
+
+t_test_Cell
+
+#Metabolic Pathways
+#Welch's Two Sample t-test (Species vs. Pathway)
+
+t_test_Metab<-t.test(RGYBH_T4F_RG$Metabolism, RGYBH_T4F_YBH$Metabolism, var.equal = FALSE, paired=FALSE)
+
+
+t_test_Metab
+
+#Genetic Information Processing
+#Welch's Two Sample t-test (Species vs. Pathway)
+
+t_test_Gen<-t.test(RGYBH_T4F_RG$Genetic, RGYBH_T4F_YBH$Genetic, var.equal = FALSE, paired=FALSE)
+
+t_test_Gen
+
+
+###RG###
+
+#Export Data for Top KO's that map to a specified pathway
+#File name = CH_2_KO_Env_Processing.csv
+
+RG_Tax4Fun_Significance<-read.csv(file = "~/Dropbox/bdgallo_MS_SUNYESF/SUNYESF_MS_THESIS/MS_Microbiome_Research_&_Chapter_Databases/Pilot_Project_Fall2017/Data_Files_Analysis/USEARCH_RG/RG_KO_Significance.csv", header=TRUE, check.names =FALSE)
+
+RG_T4F_GI<-subset(RG_Tax4Fun_Significance, Location == "Governor's Island")
+RG_T4F_EW<-subset(RG_Tax4Fun_Significance, Location == "Eagle Wings")
+
+#Environmental Information Processing
+#Welch's Two Sample t-test (Location vs. Pathway)
+
+t_test_Env<-t.test(RG_T4F_GI$Environmental, RG_T4F_EW$Environmental, var.equal = FALSE, paired=FALSE)
+
+t_test_Env
+
+#Cellular Processes
+#Welch's Two Sample t-test (Location vs. Pathway)
+
+t_test_Cell<-t.test(RG_T4F_GI$Cellular, RG_T4F_EW$Cellular, var.equal = FALSE, paired=FALSE)
+
+t_test_Cell
+
+#Metabolic Pathways
+#Welch's Two Sample t-test (Location vs. Pathway)
+
+t_test_Metab<-t.test(RG_T4F_GI$Metabolism, RG_T4F_EW$Metabolism, var.equal = FALSE, paired=FALSE)
+
+t_test_Metab
+
+#Genetic Information Processing
+#Welch's Two Sample t-test (Location vs. Pathway)
+
+t_test_Gen<-t.test(RG_T4F_GI$Genetic, RG_T4F_EW$Genetic, var.equal = FALSE, paired=FALSE)
+
+t_test_Gen
+```
+
+
+Linking Figures together (e.g. Fig 2A/B + 3A/B)
+
+```{r}
+RGYBH_FINAL<-ggarrange(RGYBH_rarefaction, RGYBH_singleton, labels = c("A", "B"), common.legend = TRUE, legend = "right")
+RG_FINAL<-ggarrange(RG_rarefaction, RG_singleton, labels = c("A", "B"), common.legend = TRUE, legend = "right")
+RGYBH_FINAL
+RG_FINAL
+```
+
+Linking Figures together (e.g. Fig S1A/B; Fig S2A/B)
+
+```{r}
+S_RG_FINAL<-ggarrange(RG, RG_singleton, labels = c("A", "B"), common.legend = TRUE, legend = "right")
+S_RGYBH_FINAL<-ggarrange(RGYBH, RGYBH_singleton, labels = c("A", "B"), common.legend = TRUE, legend = "right")
+S_RG_FINAL
+S_RGYBH_FINAL
+```
+
+
+Principle Coordinate Analysis (PCoA)
+
+```{r}
+#RGYBH
+
+ordu<-ordinate(RGYBH_PilotData_FINAL_melted, "PCoA", "unifrac", weighted = TRUE)
+plot_ordination(RGYBH_PilotData_FINAL_melted, ordu, color = "Species")
+RGYBH_pCoA<-plot_ordination(RGYBH_PilotData_FINAL_melted, ordu, color = "Species")
+RGYBH_pCoA + theme_classic() + scale_color_manual(values = c("black", "gray")) + stat_ellipse() + labs(title = "Round Goby vs. Yellow Bullhead PCoA", subtitle = "Species Comparison")+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14))
+
+
+#RG
+
+ordu_RG<-ordinate(RG_PilotData_FINAL_melted, "PCoA", "unifrac", weighted = TRUE)
+RG_pCoA<-plot_ordination(RG_PilotData_FINAL_melted, ordu_RG, color = "Location")
+RG_pCoA + theme_classic() + scale_color_manual(values = c("black", "gray")) + stat_ellipse() + labs(title = "Governor's Island vs. Eagle Wings", subtitle = "Round Goby Habitat Comparison")+ theme(axis.text = element_text(size=14), axis.title = element_text(size=14))
+
+```
