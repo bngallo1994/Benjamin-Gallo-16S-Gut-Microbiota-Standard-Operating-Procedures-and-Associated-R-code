@@ -1,6 +1,5 @@
 # Benjamin-Gallo-16S-Gut-Microbiota-Standard-Operating-Procedures-and-Associated-R-code
-Detailed Standard Operating Procedures (SOPs) for field handling and laboratory processing of fish gut microbiome samples. The Publication for our proof-of-concept work is in process at this time, but will be linked when it is accepted. Please feel free to email me (bngallo1994@gmail.com) if you have any questions on any of the methods and/or R - Code. Enjoy!
-
+Detailed methods and analysis associated with our upcoming manuscript "Use of next generation sequencing to compare habitat and species level differences in the gut microbiota of an invasive and native freshwater fish species". The paper will be linked when it is accepted. Please feel free to email me (bngallo1994@gmail.com) if you have any questions on any of the methods and/or R - Code. Enjoy!
 
 Weclome to the SOP Repository!
 
