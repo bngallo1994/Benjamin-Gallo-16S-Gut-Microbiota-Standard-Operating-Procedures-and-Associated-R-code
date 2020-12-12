@@ -41,7 +41,7 @@ PilotDataFINAL.Rmd
 Folder: Files Linked with R-Code
 
 This folder is broken into two consitutent folders: "USEARCH_RG" & "USEARCH_RGYBH" corresponding to the analyses completed on Round Goby (RG) and Yellow Bullhead (YBH).
-All files are linked to analyses in the PilotDataFINAL.Rmd file
+All files are linked to analyses in the PilotDataFINAL_Revised.Rmd file
 
 Folder: USEARCH_scripts
 
